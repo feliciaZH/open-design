@@ -476,9 +476,11 @@ code {
    * viewport). The split gets explicit `grid-row: 3` below so the
    * layout works whether the toolbar is rendered or returns null
    * (workspace-focused mode). */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto 1fr;
   height: 100vh;
   background: var(--bg-app);
+  overflow: hidden;
 }
 .app > .split {
   grid-row: 3;
@@ -10721,6 +10723,7 @@ button.connector-action.is-loading {
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  min-width: 0;
   padding: 24px;
   background:
     linear-gradient(45deg, color-mix(in srgb, var(--border) 28%, transparent) 25%, transparent 25%),
