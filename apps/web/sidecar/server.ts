@@ -10,7 +10,7 @@ import { request as createHttpsRequest } from "node:https";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { createServer as createTcpServer, type AddressInfo, type Server as TcpServer } from "node:net";
+import { createServer as createTcpServer, type AddressInfo, type Server as TcpServer, type Socket } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,9 +27,10 @@ import {
   type SidecarRuntimeContext,
 } from "@open-design/sidecar";
 
-const HOST = process.env.OD_HOST || "127.0.0.1";
-if (process.env.OD_HOST != null && !/^[a-zA-Z0-9._\-:[\]@]+$/.test(process.env.OD_HOST)) {
-  throw new Error(`OD_HOST contains invalid characters: ${process.env.OD_HOST}`);
+const HOST = process.env.OD_BIND_HOST || process.env.OD_HOST || "127.0.0.1";
+const rawHost = process.env.OD_BIND_HOST ?? process.env.OD_HOST;
+if (rawHost != null && !/^[a-zA-Z0-9._\-:[\]@]+$/.test(rawHost)) {
+  throw new Error(`OD_BIND_HOST / OD_HOST contains invalid characters: ${rawHost}`);
 }
 const DAEMON_HOST = "127.0.0.1";
 const STANDALONE_BACKEND_HOST = "127.0.0.1";
@@ -47,6 +48,11 @@ const require = createRequire(import.meta.url);
 type NextApp = {
   close?: () => Promise<void>;
   getRequestHandler(): (request: IncomingMessage, response: ServerResponse) => Promise<void>;
+  getUpgradeHandler?: () => (
+    request: IncomingMessage,
+    socket: Socket,
+    head: Buffer,
+  ) => Promise<void> | void;
   prepare(): Promise<void>;
 };
 
@@ -242,12 +248,22 @@ function resolveHttpProxyTarget(
 export function normalizeDaemonProxyOriginHeader(options: {
   daemonOrigin: string;
   origin: string | undefined;
+  webHostHeader?: string | undefined;
   webPort: number;
 }): string | undefined {
   if (options.origin == null || options.origin.length === 0) return options.origin;
 
   const schemes = ["http", "https"];
   const loopbackHosts = ["127.0.0.1", "localhost", "[::1]", HOST];
+  const hostHeader = options.webHostHeader;
+  if (hostHeader != null && hostHeader.length > 0) {
+    try {
+      const webHost = new URL(`http://${hostHeader}`).hostname;
+      if (webHost.length > 0) loopbackHosts.push(webHost);
+    } catch {
+      // Ignore malformed Host values; fall back to explicit loopback hosts.
+    }
+  }
   const allowedWebOrigins = new Set(
     schemes.flatMap((scheme) => loopbackHosts.map((host) => `${scheme}://${host}:${options.webPort}`)),
   );
@@ -267,6 +283,7 @@ async function proxyHttpRequest(
     const origin = normalizeDaemonProxyOriginHeader({
       daemonOrigin: target.origin,
       origin: typeof request.headers.origin === "string" ? request.headers.origin : undefined,
+      webHostHeader: typeof request.headers.host === "string" ? request.headers.host : undefined,
       webPort: options.daemonWebPort,
     });
     if (origin == null || origin.length === 0) {
@@ -607,6 +624,16 @@ function createDaemonProxyHandler(
       return;
     }
 
+    // Next.js dev can reject module/script asset requests with a 403
+    // when a LAN origin header is present (for example when opening the
+    // app via http://192.168.x.x:<port>). These are same-host requests
+    // flowing through our sidecar, so stripping Origin before handing
+    // off to Next keeps LAN development working while daemon APIs still
+    // enforce strict origin checks in the branch above.
+    if (typeof request.headers.origin === "string" && request.headers.origin.length > 0) {
+      delete request.headers.origin;
+    }
+
     void fallback(request, response).catch((error: unknown) => {
       response.statusCode = 500;
       response.end(error instanceof Error ? error.message : String(error));
@@ -624,6 +651,22 @@ async function startRegularNextSidecar(
   const daemonOrigin = resolveDaemonOrigin();
   const handleRequest = app.getRequestHandler();
   const httpServer = createHttpServer(createDaemonProxyHandler(daemonOrigin, handleRequest));
+  const handleUpgrade = app.getUpgradeHandler?.();
+  if (handleUpgrade != null) {
+    httpServer.on("upgrade", (request, socket, head) => {
+      // Mirror the HTTP path behavior for LAN dev: do not pass browser
+      // Origin through to Next's HMR websocket endpoint when the app is
+      // opened over a non-loopback host.
+      if (typeof request.headers.origin === "string" && request.headers.origin.length > 0) {
+        delete request.headers.origin;
+      }
+      // `http.Server` types the upgrade socket as `Duplex`; Next's handler
+      // expects `net.Socket`. At runtime this is always a TCP socket.
+      void Promise.resolve(handleUpgrade(request, socket as Socket, head)).catch(() => {
+        if (!socket.destroyed) socket.destroy();
+      });
+    });
+  }
 
   return await createWebSidecarHandle(runtime, httpServer, async () => {
     await app.close?.();

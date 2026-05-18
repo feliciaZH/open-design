@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { networkInterfaces } from 'node:os';
 import { dirname, isAbsolute, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,8 +43,26 @@ function resolveDevTsconfigPath() {
 
 const DEV_TSCONFIG_PATH = resolveDevTsconfigPath();
 
+function resolveAllowedDevOrigins(): string[] {
+  const hosts = new Set<string>(['127.0.0.1', 'localhost', '[::1]']);
+  if (process.env.OD_HOST) hosts.add(process.env.OD_HOST.trim());
+  if (process.env.OD_BIND_HOST) hosts.add(process.env.OD_BIND_HOST.trim());
+  for (const iface of Object.values(networkInterfaces())) {
+    for (const entry of iface ?? []) {
+      if (!entry.address || entry.internal) continue;
+      hosts.add(entry.address);
+    }
+  }
+  return [...hosts].filter((host) => host.length > 0);
+}
+
+const ALLOWED_DEV_ORIGINS = resolveAllowedDevOrigins();
+
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ['127.0.0.1'],
+  // Next.js dev rejects cross-origin requests for HMR/static chunks unless
+  // the host is explicitly allowlisted. Include loopback + local interface
+  // addresses so opening the app via LAN IP keeps HMR and dynamic chunks alive.
+  allowedDevOrigins: ALLOWED_DEV_ORIGINS,
   outputFileTracingRoot: WORKSPACE_ROOT,
   reactStrictMode: true,
   turbopack: {
