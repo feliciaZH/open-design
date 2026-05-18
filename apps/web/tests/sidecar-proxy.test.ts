@@ -8,10 +8,12 @@ import {
   createStandaloneBackendEnv,
   createStandaloneParentMonitorImport,
   createStandaloneServerArgs,
+  isSameHostRequest,
   normalizeDaemonProxyOriginHeader,
   resolveDaemonProxyTarget,
   resolveStandaloneBackendOrigin,
   resolveStandaloneServerEntry,
+  toUrlHost,
 } from '../sidecar/server';
 
 describe('resolveDaemonProxyTarget', () => {
@@ -170,6 +172,28 @@ describe('normalizeDaemonProxyOriginHeader', () => {
     ).toBe('https://example.com');
   });
 
+  it('allows the web host header when it matches the origin', () => {
+    expect(
+      normalizeDaemonProxyOriginHeader({
+        daemonOrigin: 'http://127.0.0.1:7456',
+        origin: 'http://192.168.1.5:3000',
+        webHostHeader: '192.168.1.5:3000',
+        webPort: 3000,
+      }),
+    ).toBe('http://127.0.0.1:7456');
+  });
+
+  it('accepts IPv6 web host headers', () => {
+    expect(
+      normalizeDaemonProxyOriginHeader({
+        daemonOrigin: 'http://127.0.0.1:7456',
+        origin: 'http://[::1]:3000',
+        webHostHeader: '[::1]:3000',
+        webPort: 3000,
+      }),
+    ).toBe('http://127.0.0.1:7456');
+  });
+
   it('preserves absent and null origins for daemon policy to handle', () => {
     expect(
       normalizeDaemonProxyOriginHeader({
@@ -185,5 +209,69 @@ describe('normalizeDaemonProxyOriginHeader', () => {
         webPort: 3000,
       }),
     ).toBe('null');
+  });
+});
+
+describe('toUrlHost', () => {
+  it('passes IPv4 addresses through unchanged', () => {
+    expect(toUrlHost('127.0.0.1')).toBe('127.0.0.1');
+    expect(toUrlHost('192.168.1.1')).toBe('192.168.1.1');
+  });
+
+  it('brackets bare IPv6 literals', () => {
+    expect(toUrlHost('::1')).toBe('[::1]');
+    expect(toUrlHost('::')).toBe('[::]');
+    expect(toUrlHost('fe80::1')).toBe('[fe80::1]');
+  });
+
+  it('does not double-bracket already-bracketed IPv6', () => {
+    expect(toUrlHost('[::1]')).toBe('[::1]');
+    expect(toUrlHost('[fe80::1]')).toBe('[fe80::1]');
+  });
+
+  it('passes hostnames through unchanged', () => {
+    expect(toUrlHost('localhost')).toBe('localhost');
+    expect(toUrlHost('my-machine.local')).toBe('my-machine.local');
+  });
+});
+
+describe('isSameHostRequest', () => {
+  function mockReq(origin: string | null, host: string | null) {
+    return {
+      headers: {
+        ...(origin != null ? { origin } : {}),
+        ...(host != null ? { host } : {}),
+      },
+    } as Parameters<typeof isSameHostRequest>[0];
+  }
+
+  it('detects same-host IPv4 origin and host header', () => {
+    const req = mockReq('http://127.0.0.1:3000', '127.0.0.1:3000');
+    expect(isSameHostRequest(req)).toBe(true);
+  });
+
+  it('detects same-host IPv6 origin and host header', () => {
+    const req = mockReq('http://[::1]:3000', '[::1]:3000');
+    expect(isSameHostRequest(req)).toBe(true);
+  });
+
+  it('detects a foreign cross-origin request', () => {
+    const req = mockReq('https://evil.example.com', '127.0.0.1:3000');
+    expect(isSameHostRequest(req)).toBe(false);
+  });
+
+  it('detects a foreign origin on a LAN host', () => {
+    const req = mockReq('https://evil.example.com', '192.168.1.5:3000');
+    expect(isSameHostRequest(req)).toBe(false);
+  });
+
+  it('returns false when origin is missing', () => {
+    const req = mockReq(null, '127.0.0.1:3000');
+    expect(isSameHostRequest(req)).toBe(false);
+  });
+
+  it('returns false when host is missing', () => {
+    const req = mockReq('http://127.0.0.1:3000', null);
+    expect(isSameHostRequest(req)).toBe(false);
   });
 });

@@ -43,14 +43,22 @@ function resolveDevTsconfigPath() {
 
 const DEV_TSCONFIG_PATH = resolveDevTsconfigPath();
 
+function toAllowedDevHost(address: string): string {
+  // IPv6 literals must be bracketed to match the hostname form produced by
+  // `new URL(origin).hostname` (e.g. ::1 → [::1], fe80::1 → [fe80::1]).
+  if (address.startsWith("[")) return address;
+  if (address.includes(":")) return `[${address}]`;
+  return address;
+}
+
 function resolveAllowedDevOrigins(): string[] {
   const hosts = new Set<string>(['127.0.0.1', 'localhost', '[::1]']);
-  if (process.env.OD_HOST) hosts.add(process.env.OD_HOST.trim());
-  if (process.env.OD_BIND_HOST) hosts.add(process.env.OD_BIND_HOST.trim());
+  if (process.env.OD_HOST) hosts.add(toAllowedDevHost(process.env.OD_HOST.trim()));
+  if (process.env.OD_BIND_HOST) hosts.add(toAllowedDevHost(process.env.OD_BIND_HOST.trim()));
   for (const iface of Object.values(networkInterfaces())) {
     for (const entry of iface ?? []) {
       if (!entry.address || entry.internal) continue;
-      hosts.add(entry.address);
+      hosts.add(toAllowedDevHost(entry.address));
     }
   }
   return [...hosts].filter((host) => host.length > 0);

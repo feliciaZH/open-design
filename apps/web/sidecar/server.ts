@@ -32,6 +32,15 @@ const rawHost = process.env.OD_BIND_HOST ?? process.env.OD_HOST;
 if (rawHost != null && !/^[a-zA-Z0-9._\-:[\]@]+$/.test(rawHost)) {
   throw new Error(`OD_BIND_HOST / OD_HOST contains invalid characters: ${rawHost}`);
 }
+// IPv6 literals must be bracketed for use in URL authority components
+// (e.g. ::1 → [::1], :: → [::]). Already-bracketed or IPv4 hosts pass
+// through unchanged.
+export function toUrlHost(host: string): string {
+  if (host.startsWith("[")) return host;
+  if (host.includes(":")) return `[${host}]`;
+  return host;
+}
+const URL_HOST = toUrlHost(HOST);
 const DAEMON_HOST = "127.0.0.1";
 const STANDALONE_BACKEND_HOST = "127.0.0.1";
 const DAEMON_PORT_ENV = SIDECAR_ENV.DAEMON_PORT;
@@ -237,7 +246,7 @@ function resolveHttpProxyTarget(
 
   let parsedRequestUrl: URL;
   try {
-    parsedRequestUrl = new URL(requestUrl, `http://${HOST}`);
+    parsedRequestUrl = new URL(requestUrl, `http://${URL_HOST}`);
   } catch {
     return null;
   }
@@ -254,7 +263,7 @@ export function normalizeDaemonProxyOriginHeader(options: {
   if (options.origin == null || options.origin.length === 0) return options.origin;
 
   const schemes = ["http", "https"];
-  const loopbackHosts = ["127.0.0.1", "localhost", "[::1]", HOST];
+  const loopbackHosts = ["127.0.0.1", "localhost", "[::1]", URL_HOST];
   const hostHeader = options.webHostHeader;
   if (hostHeader != null && hostHeader.length > 0) {
     try {
@@ -543,7 +552,7 @@ async function createWebSidecarHandle(
     pid: process.pid,
     state: "running",
     updatedAt: new Date().toISOString(),
-    url: `http://${HOST}:${port}`,
+    url: `http://${URL_HOST}:${port}`,
   };
   let ipcServer: JsonIpcServerHandle | null = null;
   let stopped = false;
@@ -607,6 +616,24 @@ async function createWebSidecarHandle(
   };
 }
 
+export function isSameHostRequest(req: IncomingMessage): boolean {
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : null;
+  const host = typeof req.headers.host === "string" ? req.headers.host : null;
+  if (!origin || !host) return false;
+  try {
+    // Compare the Origin's hostname with the Host header's hostname. When
+    // they match the request is same-host (e.g. a browser opened via LAN IP
+    // loading assets from the same IP) and the Origin can be stripped safely.
+    // A genuine cross-origin request will have a mismatched hostname and must
+    // retain its Origin so Next.js can enforce its own cross-origin guard.
+    const originHostname = new URL(origin).hostname;
+    const requestHostname = new URL(`http://${host}`).hostname;
+    return originHostname === requestHostname;
+  } catch {
+    return false;
+  }
+}
+
 function createDaemonProxyHandler(
   daemonOrigin: string | null,
   fallback: (request: IncomingMessage, response: ServerResponse) => Promise<void>,
@@ -630,8 +657,13 @@ function createDaemonProxyHandler(
     // flowing through our sidecar, so stripping Origin before handing
     // off to Next keeps LAN development working while daemon APIs still
     // enforce strict origin checks in the branch above.
+    // Only strip when the Origin hostname matches the Host header —
+    // genuinely cross-origin requests must retain their Origin so
+    // Next.js can enforce its own cross-origin guard.
     if (typeof request.headers.origin === "string" && request.headers.origin.length > 0) {
-      delete request.headers.origin;
+      if (isSameHostRequest(request)) {
+        delete request.headers.origin;
+      }
     }
 
     void fallback(request, response).catch((error: unknown) => {
@@ -656,9 +688,12 @@ async function startRegularNextSidecar(
     httpServer.on("upgrade", (request, socket, head) => {
       // Mirror the HTTP path behavior for LAN dev: do not pass browser
       // Origin through to Next's HMR websocket endpoint when the app is
-      // opened over a non-loopback host.
+      // opened over a non-loopback host. Only strip when same-host so
+      // genuine cross-origin upgrade requests are still validated.
       if (typeof request.headers.origin === "string" && request.headers.origin.length > 0) {
-        delete request.headers.origin;
+        if (isSameHostRequest(request)) {
+          delete request.headers.origin;
+        }
       }
       // `http.Server` types the upgrade socket as `Duplex`; Next's handler
       // expects `net.Socket`. At runtime this is always a TCP socket.
