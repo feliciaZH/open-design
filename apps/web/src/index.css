@@ -24105,90 +24105,6 @@ body.desktop-pet-shell .pet-task-item {
     grid-template-columns: 1fr;
   }
 }
-
-/* Plugin info pane — adapter for embedding the manifest-driven meta
-   sections inside narrow contexts (PreviewModal sidebar, design-system
-   sidebar). Tightens padding, shrinks chip type, and wraps long file
-   paths so the section list reads cleanly in a 320–540px column. */
-.plugin-info-pane {
-  padding: 16px 18px 24px;
-  background: var(--bg-panel);
-}
-.plugin-info-pane .plugin-meta-sections {
-  display: block;
-}
-.plugin-info-pane .plugin-meta-sections.is-compact {
-  font-size: 12px;
-}
-.plugin-info-pane .plugin-details-modal__section {
-  padding: 12px 0;
-}
-.plugin-info-pane .plugin-details-modal__section-title {
-  font-size: 11.5px;
-}
-.plugin-info-pane .plugin-details-modal__section-hint {
-  font-size: 11.5px;
-}
-.plugin-info-pane .plugin-details-modal__source {
-  grid-template-columns: 84px 1fr;
-  font-size: 11.5px;
-  gap: 6px 10px;
-}
-.plugin-info-pane .plugin-details-modal__source dd code {
-  word-break: break-all;
-}
-.plugin-info-pane .plugin-details-modal__chip,
-.plugin-info-pane .plugin-details-modal__atom {
-  font-size: 11px;
-}
-/* Compact byline — drop the capsule shape so the author block can
-   shrink, wrap, and stack inside narrow PreviewModal sidebars
-   (~320–400px) without overflowing the pane or breaking the rounded
-   pill into a stretched ellipse. The name + links wrap onto separate
-   lines when there isn't room, the links lose their border-left
-   separator (stacks vertically), and long author / handle strings
-   ellipsis-truncate against the available column width. */
-.plugin-info-pane .plugin-details-modal__byline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  padding: 6px 10px 6px 6px;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-.plugin-info-pane .plugin-details-modal__byline-meta {
-  flex: 1 1 auto;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-}
-.plugin-info-pane .plugin-details-modal__byline-name {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
-}
-.plugin-info-pane .plugin-details-modal__byline .plugin-details-modal__author-name {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.plugin-info-pane .plugin-details-modal__byline-links {
-  flex: 1 1 100%;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-  padding-left: 0;
-  border-left: 0;
-}
-.plugin-info-pane .plugin-details-modal__byline-links .plugin-details-modal__ext-link {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* Design-system sidebar keeps the plugin inspector first, then exposes
    DESIGN.md as a secondary spec section. This makes design systems read
    like first-class plugins instead of a special DESIGN.md-only viewer. */
@@ -26417,4 +26333,87 @@ body.desktop-pet-shell .pet-task-item {
 .app .df-drop .desc {
   font-size: 12px;
   max-width: 48ch;
+}
+/* Plugin info pane — adapter for embedding the manifest-driven meta
+  sections inside narrow contexts (PreviewModal sidebar, design-system
+  sidebar). Tightens padding, shrinks chip type, and wraps long file
+  paths so the section list reads cleanly in a 320–540px column. */
+.plugin-info-pane {
+  padding: 0px 18px 24px;
+  background: var(--bg-panel);
+}
+.plugin-info-pane .plugin-meta-sections {
+  display: block;
+}
+.plugin-info-pane .plugin-meta-sections.is-compact {
+  font-size: 12px;
+}
+.plugin-info-pane .plugin-details-modal__section {
+  padding: 12px 0;
+}
+.plugin-info-pane .plugin-details-modal__section-title {
+  font-size: 11.5px;
+}
+.plugin-info-pane .plugin-details-modal__section-hint {
+  font-size: 11.5px;
+}
+.plugin-info-pane .plugin-details-modal__source {
+  grid-template-columns: 84px 1fr;
+  font-size: 11.5px;
+  gap: 6px 10px;
+}
+.plugin-info-pane .plugin-details-modal__source dd code {
+  word-break: break-all;
+}
+.plugin-info-pane .plugin-details-modal__chip,
+.plugin-info-pane .plugin-details-modal__atom {
+  font-size: 11px;
+}
+/* Compact byline — drop the capsule shape so the author block can
+    shrink, wrap, and stack inside narrow PreviewModal sidebars
+    (~320–400px) without overflowing the pane or breaking the rounded
+    pill into a stretched ellipse. The name + links wrap onto separate
+    lines when there isn't room, the links lose their border-left
+    separator (stacks vertically), and long author / handle strings
+    ellipsis-truncate against the available column width. */
+.plugin-info-pane .plugin-details-modal__byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.plugin-info-pane .plugin-details-modal__byline-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.plugin-info-pane .plugin-details-modal__byline-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.plugin-info-pane .plugin-details-modal__byline .plugin-details-modal__author-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plugin-info-pane .plugin-details-modal__byline-links {
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding-left: 0;
+  border-left: 0;
+}
+.plugin-info-pane .plugin-details-modal__byline-links .plugin-details-modal__ext-link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
