@@ -1690,8 +1690,8 @@ describe('FileViewer tweaks toolbar', () => {
     fireEvent.click(screen.getByTestId('comment-panel-toggle'));
 
     expect(screen.getByTestId('comment-side-panel')).toBeTruthy();
-    expect(screen.getByTestId('comment-saved-marker-pin-newer').textContent).toBe('C');
-    expect(screen.getByTestId('comment-saved-marker-pin-older').textContent).toBe('C');
+    expect(screen.getByTestId('comment-saved-marker-pin-newer').textContent).toBe('1');
+    expect(screen.getByTestId('comment-saved-marker-pin-older').textContent).toBe('2');
 
     clickAgentTool('board-mode-toggle');
 
@@ -1716,7 +1716,7 @@ describe('FileViewer tweaks toolbar', () => {
       },
     }));
 
-    expect((await screen.findByTestId('comment-active-pin')).textContent).toBe('C');
+    expect((await screen.findByTestId('comment-active-pin')).textContent).toBe('3');
     expect(screen.getByTestId('comment-saved-marker-pin-newer')).toBeTruthy();
     expect(screen.getByTestId('comment-saved-marker-pin-older')).toBeTruthy();
 
@@ -2069,6 +2069,75 @@ describe('FileViewer tweaks toolbar', () => {
     expect(screen.queryByText('不要github，换成微信')).toBeNull();
     expect(screen.queryByTestId('comment-side-selectbar')).toBeNull();
     expect(screen.queryByTestId('comment-side-collapsed-rail')).toBeNull();
+  });
+
+  it('deletes selected comments when clear is clicked', async () => {
+    const removed: string[] = [];
+
+    function Harness() {
+      const [comments, setComments] = useState<PreviewComment[]>([
+        {
+          id: 'comment-1',
+          projectId: 'project-1',
+          conversationId: 'conversation-1',
+          filePath: 'preview.html',
+          elementId: 'pin-1',
+          selector: '[data-od-pin="pin-1"]',
+          label: 'pin-1',
+          text: '',
+          htmlHint: '',
+          position: { x: 16, y: 20, width: 18, height: 18 },
+          note: 'First',
+          status: 'open',
+          createdAt: 10,
+          updatedAt: 10,
+        },
+        {
+          id: 'comment-2',
+          projectId: 'project-1',
+          conversationId: 'conversation-1',
+          filePath: 'preview.html',
+          elementId: 'pin-2',
+          selector: '[data-od-pin="pin-2"]',
+          label: 'pin-2',
+          text: '',
+          htmlHint: '',
+          position: { x: 48, y: 20, width: 18, height: 18 },
+          note: 'Second',
+          status: 'open',
+          createdAt: 20,
+          updatedAt: 20,
+        },
+      ]);
+
+      return (
+        <FileViewer
+          projectId="project-1"
+          projectKind="prototype"
+          file={htmlPreviewFile()}
+          liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+          previewComments={comments}
+          onRemovePreviewComment={async (commentId) => {
+            removed.push(commentId);
+            setComments((current) => current.filter((comment) => comment.id !== commentId));
+          }}
+        />
+      );
+    }
+
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId('comment-panel-toggle'));
+    const selectButtons = screen.getAllByRole('button', { name: /select/i });
+    const firstSelectButton = selectButtons[0];
+    expect(firstSelectButton).toBeTruthy();
+    if (!firstSelectButton) return;
+    fireEvent.click(firstSelectButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Second')).toBeNull();
+    });
+    expect(removed).toEqual(['comment-2']);
   });
 });
 
