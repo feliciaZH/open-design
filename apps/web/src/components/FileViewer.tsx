@@ -2834,6 +2834,12 @@ function CommentPreviewOverlays({
     .filter((item): item is { comment: PreviewComment; index: number; snapshot: PreviewCommentSnapshot } =>
       Boolean(item.snapshot),
     );
+  const activeSavedIndex = activeTarget
+    ? visibleComments.findIndex(({ snapshot }) => snapshot.elementId === activeTarget.elementId)
+    : -1;
+  const activePinNumber = activeSavedIndex >= 0
+    ? activeSavedIndex + 1
+    : visibleComments.length + 1;
   const targetOverlay = activeTarget ?? hoveredTarget;
   return (
     <div className="comment-overlay-layer" aria-hidden={false}>
@@ -2884,7 +2890,7 @@ function CommentPreviewOverlays({
           data-testid="comment-active-pin"
           aria-hidden="true"
         >
-          {visibleComments.length + 1}
+          {activePinNumber}
         </div>
       ) : null}
       {boardTool === 'pod' && strokePoints.length > 1 ? (
