@@ -490,6 +490,24 @@ export function PreviewDrawOverlay({
         const snap = await requestSnapshot();
         if (snap) blob = await compositeWithBackground(snap);
         if (!blob) {
+          const cvs = canvasRef.current;
+          if (cvs) {
+            const copy = document.createElement('canvas');
+            copy.width = cvs.width;
+            copy.height = cvs.height;
+            const ctx = copy.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(cvs, 0, 0);
+              const dpr = window.devicePixelRatio || 1;
+              drawCaptureTarget(ctx, dpr, dpr, captureTarget);
+              if (selectionBoxRef.current) drawNormalizedBox(ctx, selectionBoxRef.current, copy.width, copy.height);
+              blob = await new Promise<Blob | null>((resolve) => copy.toBlob((b) => resolve(b), 'image/png'));
+            } else {
+              blob = await new Promise<Blob | null>((resolve) => cvs.toBlob((b) => resolve(b), 'image/png'));
+            }
+          }
+        }
+        if (!blob) {
           setCaptureWarning({
             action,
             message: captureViewport && !hasInk && !hasBox && !hasTarget

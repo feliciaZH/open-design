@@ -252,4 +252,57 @@ describe('PreviewDrawOverlay', () => {
     const usedIframe = snapshot.mock.calls[0]?.[0] as HTMLIFrameElement;
     expect(usedIframe.getAttribute('data-od-render-mode')).toBe('srcdoc');
   });
+
+  it('retries snapshot capture with longer timeouts before failing', async () => {
+    const snapshot = vi.mocked(requestPreviewSnapshot);
+    snapshot
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ dataUrl: 'data:image/png;base64,AAAA', w: 10, h: 10 });
+
+    const { getByRole } = render(
+      <PreviewDrawOverlay active captureViewport>
+        <iframe title="srcdoc" data-od-render-mode="srcdoc" data-od-active="true" />
+      </PreviewDrawOverlay>,
+    );
+
+    fireEvent.click(getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(snapshot).toHaveBeenCalledTimes(3));
+    expect(snapshot.mock.calls.map((call) => call[1])).toEqual([1500, 3000, 6000]);
+  });
+
+  it('falls back to a canvas attachment when snapshot capture is unavailable', async () => {
+    const snapshot = vi.mocked(requestPreviewSnapshot);
+    snapshot.mockResolvedValue(null);
+
+    const annotation = vi.fn((event: Event) => {
+      const detail = (event as CustomEvent<{ ack?: (result: { ok: boolean }) => void; file: File | null }>).detail;
+      detail.ack?.({ ok: true });
+    });
+    window.addEventListener('opendesign:annotation', annotation);
+
+    const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function toBlob(callback) {
+      callback(new Blob(['fallback'], { type: 'image/png' }));
+    };
+
+    try {
+      const { getByRole } = render(
+        <PreviewDrawOverlay active captureViewport>
+          <div style={{ width: 320, height: 200 }} />
+        </PreviewDrawOverlay>,
+      );
+
+      fireEvent.click(getByRole('button', { name: 'Send' }));
+
+      await waitFor(() => expect(annotation).toHaveBeenCalledTimes(1));
+      const detail = (annotation.mock.calls[0]?.[0] as CustomEvent<{ file: File | null }>).detail;
+      expect(detail.file).toBeInstanceOf(File);
+      expect(detail.file?.type).toBe('image/png');
+    } finally {
+      HTMLCanvasElement.prototype.toBlob = originalToBlob;
+      window.removeEventListener('opendesign:annotation', annotation);
+    }
+  });
 });

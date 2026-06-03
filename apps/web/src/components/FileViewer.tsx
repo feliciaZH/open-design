@@ -5034,6 +5034,13 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
     wasUrlLoadPreviewRef.current = false;
     activateSrcDocTransport();
   }, [activateSrcDocTransport, useUrlLoadPreview]);
+
+  useEffect(() => {
+    if (!drawOverlayOpen || !useUrlLoadPreview || !srcDoc) return;
+    activatedSrcDocTransportHtmlRef.current = null;
+    setSrcDocShellReady(false);
+    setSrcDocTransportResetKey((key) => key + 1);
+  }, [drawOverlayOpen, srcDoc, useUrlLoadPreview]);
   
   // Leaving Manual Edit swaps the iframe from a fully materialized srcDoc
   // document back to the lazy transport shell. Remount the shell before
